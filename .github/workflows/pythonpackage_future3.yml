@@ -5,11 +5,23 @@ on:
     branches:
         - 'future3/**'
     paths:
+        - '.github/workflows/pythonpackage_future3.yml'
+        - '.flake8'
+        - 'run_flake8.sh'
+        - '.coveragerc'
+        - 'run_pytest.sh'
+        - '**requirements*.txt'
         - '**.py'
   pull_request:
     branches:
         - 'future3/**'
     paths:
+        - '.github/workflows/pythonpackage_future3.yml'
+        - '.flake8'
+        - 'run_flake8.sh'
+        - '.coveragerc'
+        - 'run_pytest.sh'
+        - '**requirements*.txt'
         - '**.py'
 
 jobs:
@@ -19,18 +31,23 @@ jobs:
     strategy:
       max-parallel: 4
       matrix:
-        python-version: ['3.9', '3.10', '3.11']
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y libasound2-dev pulseaudio
+
+        CUR_DIR="$(pwd)"
+        mkdir -p tmp && cd tmp && wget -q http://abyz.me.uk/lg/lg.zip && unzip lg.zip > /dev/null && cd lg && make && sudo make install
+        cd "${CUR_DIR}" && sudo rm -rf tmp > /dev/null
+
         python3 -m venv .venv
         source ".venv/bin/activate"
 

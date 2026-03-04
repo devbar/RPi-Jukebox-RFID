@@ -21,15 +21,35 @@ _jukebox_core_install_os_dependencies() {
     --allow-change-held-packages
 }
 
+_jukebox_core_build_and_install_lg() {
+    local tmp_path="${HOME_PATH}/tmp"
+    local lg_filename="lg"
+    local lg_zip_filename="${lg_filename}.zip"
+
+    # always build lg and lgpio from source as pypi wheels are incomplete (armv6, python3.13) or broken (bullseye)
+    # build needs apt packages "swig python3-dev"
+    mkdir -p "${tmp_path}" && cd "${tmp_path}" || exit_on_error
+    download_from_url "http://abyz.me.uk/lg/${lg_zip_filename}" "${lg_zip_filename}"
+    unzip ${lg_zip_filename} || exit_on_error
+    cd "${lg_filename}" || exit_on_error
+    make && sudo make install
+    cd "${INSTALLATION_PATH}" && sudo rm -rf "${tmp_path}"
+}
+
 _jukebox_core_install_python_requirements() {
   print_lc "  Install Python requirements"
 
-  cd "${INSTALLATION_PATH}"  || exit_on_error
+  cd "${INSTALLATION_PATH}" || exit_on_error
 
   python3 -m venv $VIRTUAL_ENV
   source "$VIRTUAL_ENV/bin/activate"
 
   pip install --upgrade pip
+  # Remove excluded libs, if installed - see https://github.com/MiczFlor/RPi-Jukebox-RFID/pull/2470
+  pip uninstall -y -r "${INSTALLATION_PATH}"/requirements-excluded.txt
+
+  _jukebox_core_build_and_install_lg
+
   pip install --no-cache-dir -r "${INSTALLATION_PATH}/requirements.txt"
 }
 
@@ -86,7 +106,7 @@ _jukebox_core_build_and_install_pyzmq() {
     fi
 
     ZMQ_PREFIX="${JUKEBOX_ZMQ_PREFIX}" ZMQ_DRAFT_API=1 \
-      pip install -v --no-binary pyzmq 'pyzmq<26'
+      pip install -v 'pyzmq<26' --no-binary pyzmq
   else
     print_lc "    Skipping. pyzmq already installed"
   fi
@@ -119,6 +139,9 @@ _jukebox_core_check() {
 
     local pip_modules=$(get_args_from_file "${INSTALLATION_PATH}/requirements.txt")
     verify_pip_modules pyzmq $pip_modules
+
+    local pip_modules_excluded=$(get_args_from_file "${INSTALLATION_PATH}/requirements-excluded.txt")
+    verify_pip_modules_not $pip_modules_excluded
 
     log "  Verify ZMQ version '${JUKEBOX_ZMQ_VERSION}'"
     local zmq_version=$(python -c 'import zmq; print(f"{zmq.zmq_version()}")')
