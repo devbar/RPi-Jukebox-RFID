@@ -5,6 +5,7 @@ RUN set -eux ; \
     pulseaudio \
     pulseaudio-utils \
     mpd mpc \
+    ca-certificates \
     --no-install-recommends \
 	; \
 	rm -rf /var/lib/apt/lists/*
