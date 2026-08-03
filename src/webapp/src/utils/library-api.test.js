@@ -5,9 +5,17 @@ import {
   refreshLibrary,
   uploadLibraryFile,
 } from './library-api';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from 'vitest';
 
 const jsonResponse = (body, options = {}) => ({
-  json: jest.fn().mockResolvedValue(body),
+  json: vi.fn().mockResolvedValue(body),
   ok: options.ok ?? true,
   status: options.status ?? 200,
 });
@@ -64,7 +72,7 @@ class FakeXMLHttpRequest extends FakeEventTarget {
 
 describe('library JSON API', () => {
   beforeEach(() => {
-    global.fetch = jest.fn();
+    global.fetch = vi.fn();
   });
 
   afterEach(() => {
@@ -127,7 +135,7 @@ describe('streaming library upload', () => {
 
   test('sends a raw file and reports progress', async () => {
     const file = new File(['audio'], 'track name.mp3', { type: 'audio/mpeg' });
-    const onProgress = jest.fn();
+    const onProgress = vi.fn();
     const result = uploadLibraryFile({
       file,
       folder: 'My Album',

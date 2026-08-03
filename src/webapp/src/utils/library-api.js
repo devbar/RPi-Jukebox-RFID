@@ -41,7 +41,7 @@ const responseData = async (response) => {
   try {
     data = await response.json();
   }
-  catch (error) {
+  catch {
     if (response.ok) return data;
   }
 
@@ -121,7 +121,7 @@ const uploadLibraryFile = ({
     try {
       data = JSON.parse(request.responseText || '{}');
     }
-    catch (error) {
+    catch {
       // The status and generic message below still describe invalid responses.
     }
     if (request.status >= 200 && request.status < 300) {

@@ -2,6 +2,10 @@ import {
   createUploadSelection,
   uploadSelectionFromDataTransfer,
 } from './upload-selection';
+import {
+  expect,
+  test,
+} from 'vitest';
 
 const fileEntry = (file) => ({
   isDirectory: false,
