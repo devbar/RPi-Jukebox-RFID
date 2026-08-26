@@ -19,6 +19,7 @@ modules:
     bluetooth_audio_buttons: controls.bluetooth_audio_buttons
     gpio: gpio.gpioz.plugin
     sync_rfidcards: synchronisation.rfidcards
+    display: display
   others:
   - misc
 pulse:
