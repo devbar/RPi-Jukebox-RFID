@@ -36,8 +36,10 @@ class Epd2in13bV3Display:
         """
         Show title and artist on the display.
         """
-
         logger.debug('LCD: show')
+        
+        epd = epd2in9d.EPD()
+        epd.init()
         
         line0 = artist if artist else 'Unknown artist'
         
@@ -50,23 +52,9 @@ class Epd2in13bV3Display:
         
         line3 = lines_title[0] if len(lines_title) > 0 else 'Unknown title'
         line4 = lines_title[1] if len(lines_title) > 1 else ''
-        
-
-        if paused:
-            line3 = '[PAUSE] ' + line3
-
-        # self.lcd.clear()
-        # self.lcd.write_string(line1 + '\r\n' + line2)
-        logger.debug(f'LCD: {line1} | {line2}')
-
-        epd = epd2in9d.EPD()
-        epd.init()
 
         font24 = ImageFont.truetype(os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'display/Font.ttc'), 24)
         font18 = ImageFont.truetype(os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'display/Font.ttc'), 18)
-
-        logger.debug(f'Fonts loaded')
-
 
         HImage = Image.new('1', (epd.height, epd.width), 0)  # 298*126
         draw = ImageDraw.Draw(HImage)
@@ -76,7 +64,6 @@ class Epd2in13bV3Display:
         
         draw.text((10, 75), line3, font = font18, fill = 255)
         draw.text((10, 99), line4, font = font18, fill = 255)
-
 
         epd.DisplayPartial(epd.getbuffer(HImage))
         epd.init()

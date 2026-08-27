@@ -3,13 +3,16 @@ Display plugin for showing the current player status on an external display.
 
 This plugin subscribes to the internal Jukebox publisher and updates the display
 whenever the player status changes meaningfully.
+
+Display updates are processed serially by a single worker thread. If multiple
+updates arrive while a refresh is in progress, only the latest update is applied.
+This is required for EPD/e-paper displays which cannot handle concurrent refreshes.
 """
 
 import zmq
 import threading
 import json
 import logging
-import time
 
 import jukebox.plugs as plugs
 from .simple_lcd import SimpleLcdDisplay
@@ -17,10 +20,15 @@ from .epd2in13b_V3 import Epd2in13bV3Display
 
 logger = logging.getLogger('jb.Display')
 
+# Select the display driver to use.
+# 'simple_lcd' is a placeholder console logger for development.
+# 'epd2in13b_V3' is the Waveshare 2.13inch e-Paper display.
+DISPLAY_TYPE = 'epd2in13b_V3'
+
 # Time to wait before clearing the display after a stop event.
 # This avoids flickering during track/folder changes where MPD briefly reports stop.
 CLEAR_DELAY_SECONDS = 2.0
-DISPLAY_TYPE = 'epd2in13b_V3'
+
 
 def _format_status(status):
     """
@@ -34,12 +42,25 @@ def _format_status(status):
     artist = status.get('artist', '')
     album = status.get('album', '')
     file_path = status.get('file', '')
-    return title, artist, state, album, file_path
+    return title, artist, state, file_path
+
+
+def _create_display():
+    """
+    Factory for creating the configured display driver.
+    """
+    if DISPLAY_TYPE == 'epd2in13b_V3':
+        return Epd2in13bV3Display()
+    return SimpleLcdDisplay()
 
 
 class DisplaySubscriber:
     """
     Subscriber that listens to playerstatus updates and refreshes the display.
+
+    Display updates are processed serially by a single worker thread. If multiple
+    updates arrive while a refresh is in progress, only the latest update is applied.
+    This is required for EPD/e-paper displays which cannot handle concurrent refreshes.
     """
 
     def __init__(self):
@@ -48,35 +69,41 @@ class DisplaySubscriber:
         self.sub.connect('inproc://PublisherToProxy')
         self.sub.setsockopt(zmq.SUBSCRIBE, b'playerstatus')
 
-        self.display = self._createDisplay()
+        self.display = _create_display()
         self.running = True
-        self.thread = threading.Thread(target=self._event_loop, daemon=True, name='DisplaySubscriber')
+
+        self._pending_status = None
+        self._pending_lock = threading.Lock()
+        self._update_event = threading.Event()
 
         self._last_key = None
         self._clear_timer = None
-        self._lock = threading.Lock()
-        
-    def _createDisplay(self):
-        if DISPLAY_TYPE == 'epd2in13b_V3':
-            return Epd2in13bV3Display()
-        else:
-            return SimpleLcdDisplay()
+        self._timer_lock = threading.Lock()
+
+        self._receiver_thread = threading.Thread(target=self._event_loop, daemon=True, name='DisplayReceiver')
+        self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True, name='DisplayWorker')
 
     def start(self):
-        """Start the subscriber thread."""
-        self.thread.start()
+        """Start the receiver and worker threads."""
+        self._receiver_thread.start()
+        self._worker_thread.start()
         logger.info('Display subscriber started')
 
     def stop(self):
-        """Stop the subscriber thread and clear the display."""
+        """Stop the subscriber threads and clear the display."""
         self.running = False
         self.sub.close()
-        self.thread.join(timeout=2.0)
+        self._update_event.set()
+        self._receiver_thread.join(timeout=2.0)
+        self._worker_thread.join(timeout=2.0)
         self._cancel_clear_timer()
         self.display.clear()
         logger.info('Display subscriber stopped')
 
     def _event_loop(self):
+        """
+        Receive playerstatus messages and schedule the latest update.
+        """
         while self.running:
             try:
                 topic, message = self.sub.recv_multipart()
@@ -95,34 +122,54 @@ class DisplaySubscriber:
                 logger.error(f'Error decoding playerstatus JSON: {e}')
                 continue
 
-            self._update_display(status)
+            with self._pending_lock:
+                self._pending_status = status
+            self._update_event.set()
+
+    def _worker_loop(self):
+        """
+        Process display updates one at a time, always using the latest pending status.
+        """
+        while self.running:
+            self._update_event.wait()
+            if not self.running:
+                break
+
+            with self._pending_lock:
+                status = self._pending_status
+                self._pending_status = None
+                self._update_event.clear()
+
+            if status is not None:
+                try:
+                    self._update_display(status)
+                except Exception as e:
+                    logger.error(f'Error updating display: {e}')
 
     def _cancel_clear_timer(self):
-        with self._lock:
+        with self._timer_lock:
             if self._clear_timer is not None:
                 self._clear_timer.cancel()
                 self._clear_timer = None
 
     def _schedule_clear(self):
         self._cancel_clear_timer()
-        with self._lock:
+        with self._timer_lock:
             self._clear_timer = threading.Timer(CLEAR_DELAY_SECONDS, self._do_clear)
             self._clear_timer.start()
 
     def _do_clear(self):
-        with self._lock:
+        with self._timer_lock:
             self._clear_timer = None
         self.display.clear()
 
     def _update_display(self, status):
-        title, artist, state, album, file_path = _format_status(status)
+        title, artist, state, file_path = _format_status(status)
 
         # Create a key that represents the meaningful displayed content.
         # Include title and artist to catch delayed metadata updates from streams.
         # Ignore elapsed/duration changes that do not affect the display.
-        key = (file_path, state, title, artist, album)
-        
-        logger.debug(f'Display update: {key}')
+        key = (file_path, state, title, artist)
 
         if key == self._last_key:
             return
