@@ -24,14 +24,17 @@ class SimpleLcdDisplay:
         # self.lcd = CharLCD(cols=16, rows=2, pin_rs=..., pin_e=..., pins_data=[...])
         pass
 
-    def show(self, title: str, artist: str, album: str = None, paused: bool = False):
+    def show(self, title: str, artist: str, album: str = None, paused: bool = False, repeat_info: str = ''):
         """
         Show title and artist on the display.
         """
         line1 = (title or 'Unknown title')[:16]
         line2 = (artist or 'Unknown artist')[:16]
+
         if paused:
             line2 = '[PAUSE] ' + line2[:8]
+        elif repeat_info:
+            line2 = f'{line2[:12]} {repeat_info[:3]}'
 
         # self.lcd.clear()
         # self.lcd.write_string(line1 + '\r\n' + line2)

@@ -35,14 +35,29 @@ def _format_status(status):
     Extract display-relevant fields from the player status.
     """
     if not isinstance(status, dict):
-        return None, None, 'stop', ''
+        return None, None, 'stop', '', ''
 
     state = status.get('state', 'stop')
     title = status.get('title', '')
     artist = status.get('artist', '')
     album = status.get('album', '')
     file_path = status.get('file', '')
-    return title, artist, state, file_path
+    repeat_info = _format_repeat(status)
+    return title, artist, state, file_path, repeat_info
+
+
+def _format_repeat(status):
+    """
+    Build a short repeat indicator from MPD repeat/single fields.
+    """
+    repeat = status.get('repeat')
+    single = status.get('single')
+
+    if repeat in (1, '1', True):
+        if single in (1, '1', True):
+            return 'repeat_one'
+        return 'repeat_all'
+    return ''
 
 
 def _create_display():
@@ -164,12 +179,12 @@ class DisplaySubscriber:
         self.display.clear()
 
     def _update_display(self, status):
-        title, artist, state, file_path = _format_status(status)
+        title, artist, state, file_path, repeat_info = _format_status(status)
 
         # Create a key that represents the meaningful displayed content.
-        # Include title and artist to catch delayed metadata updates from streams.
-        # Ignore elapsed/duration changes that do not affect the display.
-        key = (file_path, state, title, artist)
+        # Include title, artist and repeat_info to catch delayed metadata updates
+        # and repeat mode changes. Ignore elapsed/duration changes.
+        key = (file_path, state, title, artist, repeat_info)
 
         if key == self._last_key:
             return
@@ -177,10 +192,10 @@ class DisplaySubscriber:
 
         if state == 'play':
             self._cancel_clear_timer()
-            self.display.show(title, artist, album=status.get('album'))
+            self.display.show(title, artist, album=status.get('album'), repeat_info=repeat_info)
         elif state == 'pause':
             self._cancel_clear_timer()
-            self.display.show(title, artist, album=status.get('album'), paused=True)
+            self.display.show(title, artist, album=status.get('album'), paused=True, repeat_info=repeat_info)
         elif state == 'stop':
             # Delay clear to avoid flicker during track/folder changes.
             self._schedule_clear()
