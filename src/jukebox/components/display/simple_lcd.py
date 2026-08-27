@@ -24,7 +24,7 @@ class SimpleLcdDisplay:
         # self.lcd = CharLCD(cols=16, rows=2, pin_rs=..., pin_e=..., pins_data=[...])
         pass
 
-    def show(self, title: str, artist: str, paused: bool = False):
+    def show(self, title: str, artist: str, album: str = None, paused: bool = False):
         """
         Show title and artist on the display.
         """
