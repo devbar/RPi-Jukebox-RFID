@@ -8,6 +8,7 @@ or luma.oled for SSD1306 / SH1106 OLED displays.
 import logging
 import os
 import time
+import textwrap
 
 from .waveshare_epd import epd2in9d
 from PIL import Image, ImageDraw, ImageFont
@@ -27,7 +28,9 @@ class Epd2in13bV3Display:
         # Example for a real HD44780 via RPLCD:
         # from RPLCD import CharLCD
         # self.lcd = CharLCD(cols=16, rows=2, pin_rs=..., pin_e=..., pins_data=[...])
-        pass
+        epd = epd2in9d.EPD()
+        epd.init()
+        epd.Clear()
 
     def show(self, title: str, artist: str, album: str = None, paused: bool = False):
         """
@@ -35,12 +38,19 @@ class Epd2in13bV3Display:
         """
 
         logger.debug('LCD: show')
-        logger.debug(os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'display/Font.ttc'))
-
-        line1 = (title or 'Unknown title')[:19]
-        line2 = (title or 'Unknown title')[19:]
-        line3 = (artist or 'Unknown artist')[:20]
-        line4 = (artist or 'Unknown artist')[20:]
+        
+        line0 = artist if artist else 'Unknown artist'
+        
+        lines_album = textwrap.wrap(album or '', width=35)
+        
+        line1 = lines_album[0] if len(lines_album) > 0 else 'Unknown album'
+        line2 = lines_album[1] if len(lines_album) > 1 else ''
+        
+        lines_title = textwrap.wrap(title or '', width=25)
+        
+        line3 = lines_title[0] if len(lines_title) > 0 else 'Unknown title'
+        line4 = lines_title[1] if len(lines_title) > 1 else ''
+        
 
         if paused:
             line3 = '[PAUSE] ' + line3
@@ -52,18 +62,20 @@ class Epd2in13bV3Display:
         epd = epd2in9d.EPD()
         epd.init()
 
-        font32 = ImageFont.truetype(os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'display/Font.ttc'), 32)
         font24 = ImageFont.truetype(os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'display/Font.ttc'), 24)
+        font18 = ImageFont.truetype(os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'display/Font.ttc'), 18)
 
         logger.debug(f'Fonts loaded')
 
 
         HImage = Image.new('1', (epd.height, epd.width), 0)  # 298*126
         draw = ImageDraw.Draw(HImage)
-        draw.text((10, 0), line1, font = font32, fill = 255)
-        draw.text((10, 27), line2, font = font32, fill = 255)
-        draw.text((10, 57), line3, font = font24, fill = 255)
-        draw.text((10, 84), line4, font = font24, fill = 255)
+        draw.text((10, 0), line0, font = font24, fill = 255)
+        draw.text((10, 29), line1, font = font18, fill = 255)
+        draw.text((10, 49), line2, font = font18, fill = 255)
+        
+        draw.text((10, 75), line3, font = font18, fill = 255)
+        draw.text((10, 99), line4, font = font18, fill = 255)
 
 
         epd.DisplayPartial(epd.getbuffer(HImage))
