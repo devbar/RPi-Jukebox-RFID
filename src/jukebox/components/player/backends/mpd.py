@@ -145,6 +145,12 @@ class MpdLock:
         return self._lock.locked()
 
 
+# Fields that MPD's currentsong command provides per song/stream.
+# These must be reset before each poll, because streams may not re-send them
+# and we don't want stale metadata from the previous track to persist.
+_VOLATILE_SONG_FIELDS = ('title', 'artist', 'album', 'albumartist', 'track', 'date', 'genre', 'name', 'composer', 'performer')
+
+
 class PlayerMPD:
     """Interface to MPD Music Player Daemon"""
 
@@ -290,8 +296,18 @@ class PlayerMPD:
         this method polls the status from mpd and stores the important inforamtion in the music_player_status,
         it will repeat itself in the intervall specified by self.mpd_status_poll_interval
         """
+        # Clear volatile song metadata so that streams/radio do not show stale info
+        # from the previous track when MPD does not re-send these fields.
+        for key in _VOLATILE_SONG_FIELDS:
+            self.mpd_status.pop(key, None)
+
         self.mpd_status.update(self.mpd_retry_with_mutex(self.mpd_client.status))
         self.mpd_status.update(self.mpd_retry_with_mutex(self.mpd_client.currentsong))
+
+        # For streams, MPD often provides a 'name' field instead of 'title'.
+        # Use it as a fallback so the display/web UI can show something meaningful.
+        if not self.mpd_status.get('title') and self.mpd_status.get('name'):
+            self.mpd_status['title'] = self.mpd_status['name']
 
         if self.mpd_status.get('elapsed') is not None:
             self.current_folder_status["ELAPSED"] = self.mpd_status['elapsed']
