@@ -162,3 +162,6 @@ webapp:
   # when handling a lot of music
   # Defaults to true
   show_covers: true
+display:
+  enable: false
+  config_file: ../../shared/settings/display.yaml

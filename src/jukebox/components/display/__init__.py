@@ -9,22 +9,22 @@ updates arrive while a refresh is in progress, only the latest update is applied
 This is required for EPD/e-paper displays which cannot handle concurrent refreshes.
 """
 
-import zmq
+import zmq # type: ignore
 import threading
 import json
 import logging
 
-import jukebox.plugs as plugs
-from .simple_lcd import SimpleLcdDisplay
-from .epd2in13b_V3 import Epd2in13bV3Display
-from .epd2in9b_V4 import Epd2in9bV4Display
+import jukebox.plugs as plugin
+import jukebox.cfghandler
+import jukebox.publishing
+import jukebox.utils
 
 logger = logging.getLogger('jb.Display')
+cfg_main = jukebox.cfghandler.get_handler('jukebox')
+cfg_display = jukebox.cfghandler.get_handler('display')
 
-# Select the display driver to use.
-# 'simple_lcd' is a placeholder console logger for development.
-# 'epd2in13b_V3' is the Waveshare 2.13inch e-Paper display.
-DISPLAY_TYPE = 'epd2in9b_V4'
+#: Indicates whether the display plugin is enabled
+IS_ENABLED: bool = False
 
 # Time to wait before clearing the display after a stop event.
 # This avoids flickering during track/folder changes where MPD briefly reports stop.
@@ -43,8 +43,9 @@ def _format_status(status):
     artist = status.get('artist', '')
     album = status.get('album', '')
     file_path = status.get('file', '')
+    coverart = status.get('coverart', '')
     repeat_info = _format_repeat(status)
-    return title, artist, state, file_path, repeat_info
+    return title, artist, state, file_path, repeat_info, album, coverart
 
 
 def _format_repeat(status):
@@ -65,13 +66,18 @@ def _create_display():
     """
     Factory for creating the configured display driver.
     """
-    if DISPLAY_TYPE == 'epd2in13b_V3':
-        return Epd2in13bV3Display()
     
-    if DISPLAY_TYPE == 'epd2in9b_V4':
+    display_type: str = cfg_display.setndefault('display', 'type')
+    
+    if display_type == 'epd2in9b_V3':
+        from .epd2in9b_V3 import Epd2in9bV3Display
+        return Epd2in9bV3Display()
+    
+    if display_type == 'epd2in9b_V4':
+        from .epd2in9b_V4 import Epd2in9bV4Display
         return Epd2in9bV4Display()
     
-    return SimpleLcdDisplay()
+    raise ValueError(f"Unsupported display type '{display_type}'")
 
 
 class DisplaySubscriber:
@@ -184,12 +190,12 @@ class DisplaySubscriber:
         self.display.clear()
 
     def _update_display(self, status):
-        title, artist, state, file_path, repeat_info = _format_status(status)
+        title, artist, state, file_path, repeat_info, album, coverart = _format_status(status)
 
         # Create a key that represents the meaningful displayed content.
         # Include title, artist and repeat_info to catch delayed metadata updates
         # and repeat mode changes. Ignore elapsed/duration changes.
-        key = (file_path, state, title, artist, repeat_info)
+        key = (file_path, state, title, artist, repeat_info, album, coverart)
 
         if key == self._last_key:
             return
@@ -212,15 +218,28 @@ class DisplaySubscriber:
 subscriber = None
 
 
-@plugs.initialize
+@plugin.initialize
 def initialize():
-    logger.info('Initializing display plugin')
+    global IS_ENABLED
+    global CONFIG_FILE
     global subscriber
+    
+    enable = cfg_main.setndefault('display', 'enable', value=False)
+    CONFIG_FILE = cfg_display.setndefault('display', 'config_file', value='../../shared/settings/display.yaml')
+    
+    if not enable:
+        return
+    try:
+        jukebox.cfghandler.load_yaml(cfg_display, CONFIG_FILE)
+    except Exception as e:
+        logger.error(f"Disable DISPLAY due to error loading DISPLAY config file. {e.__class__.__name__}: {e}")
+        return
+        
     subscriber = DisplaySubscriber()
     subscriber.start()
 
 
-@plugs.atexit
+@plugin.atexit
 def atexit(**ignored_kwargs):
     global subscriber
     if subscriber is not None:
