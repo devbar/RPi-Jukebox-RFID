@@ -17,13 +17,14 @@ import logging
 import jukebox.plugs as plugs
 from .simple_lcd import SimpleLcdDisplay
 from .epd2in13b_V3 import Epd2in13bV3Display
+from .epd2in9b_V4 import Epd2in9bV4Display
 
 logger = logging.getLogger('jb.Display')
 
 # Select the display driver to use.
 # 'simple_lcd' is a placeholder console logger for development.
 # 'epd2in13b_V3' is the Waveshare 2.13inch e-Paper display.
-DISPLAY_TYPE = 'epd2in13b_V3'
+DISPLAY_TYPE = 'epd2in9b_V4'
 
 # Time to wait before clearing the display after a stop event.
 # This avoids flickering during track/folder changes where MPD briefly reports stop.
@@ -66,6 +67,10 @@ def _create_display():
     """
     if DISPLAY_TYPE == 'epd2in13b_V3':
         return Epd2in13bV3Display()
+    
+    if DISPLAY_TYPE == 'epd2in9b_V4':
+        return Epd2in9bV4Display()
+    
     return SimpleLcdDisplay()
 
 
