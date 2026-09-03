@@ -20,7 +20,7 @@ class Epd2in9bV3Display:
         epd.init()
         epd.Clear()        
 
-    def show(self, title: str, artist: str, album: str = None, paused: bool = False, repeat_info: str = None):
+    def show(self, title: str, artist: str, album: str = None, paused: bool = False, repeat_info: str = None, coverart: str = None):
         """
         Show title and artist etc. on the display.
         """
