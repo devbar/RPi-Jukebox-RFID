@@ -9,6 +9,7 @@ updates arrive while a refresh is in progress, only the latest update is applied
 This is required for EPD/e-paper displays which cannot handle concurrent refreshes.
 """
 
+import os
 import zmq
 import threading
 import json
@@ -73,10 +74,66 @@ def _resolve_music_file(file_path: str):
         return None
     try:
         library_path = components.player.get_music_library_path()
-        return Path(library_path, file_path).expanduser()
+        resolved = Path(library_path, file_path).expanduser().resolve()
+        return resolved
     except Exception as e:
         logger.debug(f'Could not resolve music file {file_path}: {e}')
         return None
+
+
+def _get_coverart_path_for_file(file_path: str, cache_manager):
+    """
+    Resolve cover art for the given player file path.
+    Returns the cache filename if available, or None if unavailable/pending.
+    """
+    mp3_file_path = _resolve_music_file(file_path)
+    if mp3_file_path is None:
+        logger.debug(f'Cannot resolve coverart: {file_path} is a stream or invalid path')
+        return None
+    if cache_manager is None:
+        logger.debug('No coverart cache manager available')
+        return None
+
+    from components.player.backends.coverart_cache_manager import CACHE_PENDING, NO_CACHE
+
+    cache_filename = cache_manager.get_cache_filename(str(mp3_file_path))
+    logger.debug(f'Coverart for {file_path}: {cache_filename}')
+
+    if cache_filename in (CACHE_PENDING, NO_CACHE, ''):
+        return None
+
+    return cache_filename
+
+
+def _get_coverart_cache_directory():
+    """
+    Return the absolute path to the cover art cache directory.
+    """
+    try:
+        cache_path = cfg_main.getn('webapp', 'coverart_cache_path')
+        return Path(cache_path).expanduser().resolve()
+    except Exception as e:
+        logger.debug(f'Could not resolve coverart cache directory: {e}')
+        return None
+
+
+def _resolve_coverart_path(cache_filename: str):
+    """
+    Resolve a cover art cache filename to an absolute file path.
+    """
+    if not cache_filename:
+        return None
+    if os.path.isabs(cache_filename):
+        return cache_filename
+
+    cache_dir = _get_coverart_cache_directory()
+    if cache_dir is None:
+        return None
+
+    cover_path = cache_dir / cache_filename
+    if cover_path.is_file():
+        return str(cover_path)
+    return None
 
 
 def _create_coverart_cache_manager():
@@ -95,7 +152,7 @@ def _create_display():
     Factory for creating the configured display driver.
     """
 
-    display_type: str = cfg_display.setndefault('display', 'type')
+    display_type: str = cfg_display.setndefault('display', 'type', value=None)
 
     if display_type == 'epd2in9b_V3':
         from .epd2in9b_V3 import Epd2in9bV3Display
@@ -107,7 +164,9 @@ def _create_display():
 
     if display_type == 'fb_2in8':
         from .fb_2in8 import Fb2in8Display
-        return Fb2in8Display()
+        framebuffer = cfg_display.setndefault('display', 'framebuffer', value='/dev/fb0')
+        color_format = cfg_display.setndefault('display', 'color_format', value='rgb888')
+        return Fb2in8Display(framebuffer=framebuffer, color_format=color_format)
 
     raise ValueError(f"Unsupported display type '{display_type}'")
 
@@ -215,7 +274,8 @@ class DisplaySubscriber:
                 if payload and self._last_file_path:
                     ready_path = payload.get('mp3_file_path', '')
                     expected_path = str(_resolve_music_file(self._last_file_path) or '')
-                    if ready_path == expected_path:
+                    logger.debug(f'Coverart ready event: ready_path={ready_path}, expected_path={expected_path}, last_file={self._last_file_path}')
+                    if ready_path and expected_path and ready_path == expected_path:
                         self._pending_coverart = payload.get('cache_filename')
                         with self._pending_lock:
                             # Force a re-render by clearing the last key
@@ -278,15 +338,19 @@ class DisplaySubscriber:
         if state == 'play':
             self._cancel_clear_timer()
             self._last_file_path = file_path
-            if coverart is None and self._coverart_cache_manager is not None:
-                coverart = self._coverart_cache_manager.get_cache_filename(str(_resolve_music_file(file_path)))
-            self.display.show(title, artist, album=album, repeat_info=repeat_info, coverart=coverart)
+            if coverart is None:
+                coverart = _get_coverart_path_for_file(file_path, self._coverart_cache_manager)
+            coverart_path = _resolve_coverart_path(coverart)
+            logger.debug(f'Resolved coverart path: {coverart_path}')
+            self.display.show(title, artist, album=album, repeat_info=repeat_info, coverart=coverart_path)
         elif state == 'pause':
             self._cancel_clear_timer()
             self._last_file_path = file_path
-            if coverart is None and self._coverart_cache_manager is not None:
-                coverart = self._coverart_cache_manager.get_cache_filename(str(_resolve_music_file(file_path)))
-            self.display.show(title, artist, album=album, paused=True, repeat_info=repeat_info, coverart=coverart)
+            if coverart is None:
+                coverart = _get_coverart_path_for_file(file_path, self._coverart_cache_manager)
+            coverart_path = _resolve_coverart_path(coverart)
+            logger.debug(f'Resolved coverart path: {coverart_path}')
+            self.display.show(title, artist, album=album, paused=True, repeat_info=repeat_info, coverart=coverart_path)
         elif state == 'stop':
             self._last_file_path = None
             # Delay clear to avoid flicker during track/folder changes.

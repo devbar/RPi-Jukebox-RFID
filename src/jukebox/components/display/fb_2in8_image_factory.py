@@ -78,10 +78,18 @@ class Fb2in8ImageFactory:
                 cover_path = coverart
                 if not os.path.isabs(cover_path):
                     # Resolve relative to the webapp build cover-cache directory
+                    # From src/jukebox/components/display/ go up 4 levels to project root,
+                    # then to src/webapp/build/cover-cache
                     base_dir = os.path.expanduser(
                         os.path.join(
-                            os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))),
-                            'webapp/build/cover-cache'
+                            os.path.dirname(
+                                os.path.dirname(
+                                    os.path.dirname(
+                                        os.path.dirname(os.path.realpath(__file__))
+                                    )
+                                )
+                            ),
+                            'src/webapp/build/cover-cache'
                         )
                     )
                     cover_path = os.path.join(base_dir, cover_path)

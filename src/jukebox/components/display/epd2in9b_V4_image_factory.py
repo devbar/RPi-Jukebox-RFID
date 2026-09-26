@@ -18,27 +18,27 @@ class Epd2in9bV4ImageFactory:
         
         line0 = artist if artist else 'Unknown artist'
         
-        lines_album = textwrap.wrap(album or '', width=35)
+        lines_album = textwrap.wrap(album or '', width=33)
         
         line1 = lines_album[0] if len(lines_album) > 0 else 'Unknown album'
         line2 = lines_album[1] if len(lines_album) > 1 else ''
         
-        lines_title = textwrap.wrap(title or '', width=35)
+        lines_title = textwrap.wrap(title or '', width=33)
         
         line3 = lines_title[0] if len(lines_title) > 0 else 'Unknown title'
-        line4 = lines_title[1][25:] if len(lines_title) > 1 else ''
+        line4 = lines_title[1][:25] if len(lines_title) > 1 else ''
 
         font24 = self._get_font(24);
         font18 = self._get_font(18);
 
         image = Image.new('1', (epd_height, epd_width), 255)
         draw = ImageDraw.Draw(image)
-        draw.text((10, 0), line0, font = font24, fill = 0)
-        draw.text((10, 29), line1, font = font18, fill = 0)
-        draw.text((10, 49), line2, font = font18, fill = 0)
+        draw.text((5, 0), line0, font = font24, fill = 0)
+        draw.text((5, 29), line1, font = font18, fill = 0)
+        draw.text((5, 49), line2, font = font18, fill = 0)
         
-        draw.text((10, 75), line3, font = font18, fill = 0)
-        draw.text((10, 99), line4, font = font18, fill = 0)
+        draw.text((5, 75), line3, font = font18, fill = 0)
+        draw.text((5, 99), line4, font = font18, fill = 0)
         
         if repeat_info == 'repeat_one':
             draw.text((240, 99), "[R1]", font = font18, fill = 0)

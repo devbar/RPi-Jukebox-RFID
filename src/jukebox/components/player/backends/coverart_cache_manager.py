@@ -9,7 +9,6 @@ from queue import Queue
 from threading import Thread
 import jukebox.cfghandler
 import jukebox.publishing as publishing
-import jukebox.publishing as publishing
 
 COVER_PREFIX = 'cover'
 NO_COVER_ART_EXTENSION = 'no-art'
@@ -74,22 +73,7 @@ class CoverartCacheManager:
         try:
             publisher = publishing.get_publisher()
             payload = {
-                'mp3_file_path': str(mp3_file_path),
-                'cache_filename': cache_filename,
-            }
-            publisher.send('coverart.ready', payload)
-        except Exception as e:
-            logger.error(f"Error publishing coverart ready event: {e}")
-
-    def _notify_coverart_ready(self, mp3_file_path: str, cache_filename: str):
-        """
-        Publish a notification that cover art for a file is now available in the cache.
-        Subscribers can listen on topic 'coverart.ready'.
-        """
-        try:
-            publisher = publishing.get_publisher()
-            payload = {
-                'mp3_file_path': str(mp3_file_path),
+                'mp3_file_path': str(Path(mp3_file_path).resolve()),
                 'cache_filename': cache_filename,
             }
             publisher.send('coverart.ready', payload)
